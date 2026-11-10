@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Idle Ball Game</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; margin: 0; padding: 0; }
+        body { background-color: #0d0d12; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100vh; width: 100vw; overflow: hidden; }
+        header { width: 100%; padding: 12px; text-align: center; background: #181820; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+        .money-display { font-size: 1.8rem; font-weight: bold; color: #4cd137; }
+        .level-display { font-size: 0.95rem; color: #00d2d3; font-weight: bold; margin-top: 2px; }
+        #game-container { position: relative; display: flex; justify-content: center; align-items: center; width: 100%; flex: 1; }
+        canvas { background: #121218; border-radius: 50%; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+        .upgrades-container { width: 100%; max-width: 420px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: #181820; border-top: 1px solid #2a2a35; }
+        .upgrade-card { background: #22222d; border-radius: 10px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #323240; }
+        .upgrade-title { font-weight: bold; font-size: 0.9rem; color: #f0f0f5; }
+        .upgrade-desc { font-size: 0.75rem; color: #9e9ea6; display: block; margin-top: 2px; }
+        .upgrade-btn { background: #007aff; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: bold; font-size: 0.85rem; cursor: pointer; }
+        .upgrade-btn:disabled { background: #2e2e3a; color: #6c6c78; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="money-display" id="money">R$ 0</div>
+        <div class="level-display" id="level">Nível 1</div>
+    </header>
+    <div id="game-container">
+        <canvas id="canvas"></canvas>
+    </div>
+    <div class="upgrades-container">
+        <div class="upgrade-card">
+            <div><span class="upgrade-title">Velocidade da Bola</span><span class="upgrade-desc" id="lvl-speed">Nível 1</span></div>
+            <button class="upgrade-btn" id="btn-speed" onclick="buySpeed()">R$ 10</button>
+        </div>
+        <div class="upgrade-card">
+            <div><span class="upgrade-title">Valor da Batida</span><span class="upgrade-desc" id="lvl-income">Nível 1</span></div>
+            <button class="upgrade-btn" id="btn-income" onclick="buyIncome()">R$ 15</button>
+        </div>
+        <div class="upgrade-card">
+            <div><span class="upgrade-title">Adicionar Bola</span><span class="upgrade-desc" id="lvl-balls">Qtd: 1</span></div>
+            <button class="upgrade-btn" id="btn-balls" onclick="buyBall()">R$ 50</button>
+        </div>
+        <div class="upgrade-card">
+            <div><span class="upgrade-title">Dano da Bola</span><span class="upgrade-desc" id="lvl-damage">Nível 1</span></div>
+            <button class="upgrade-btn" id="btn-damage" onclick="buyDamage()">R$ 25</button>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-container');
+        
+        const size = Math.min(container.clientWidth - 20, container.clientHeight - 20, 340);
+        canvas.width = size; canvas.height = size;
+        const centerX = size / 2, centerY = size / 2;
+        const radius = (size / 2) - 12;
+
+        let money = 0;
+        let currentLevel = 1;
+        let circleMaxHp = 25;
+        let circleHp = 25;
+
+        let speedLvl = 1, incomeLvl = 1, damageLvl = 1;
+        let speedCost = 10, incomeCost = 15, ballCost = 50, damageCost = 25;
+        let ballRadius = 8, baseSpeed = 3;
+
+        let balls = [{ x: centerX, y: centerY, vx: 2.5, vy: 2.5 }];
+
+        function updateUI() {
+            document.getElementById('money').innerText = R$ ${Math.floor(money)};
+            document.getElementById('level').innerText = Nível ${currentLevel};
+            document.getElementById('lvl-speed').innerText = Nível ${speedLvl};
+            document.getElementById('btn-speed').innerText = R$ ${speedCost};
+            document.getElementById('btn-speed').disabled = money < speedCost;
+            document.getElementById('lvl-income').innerText = R$ ${incomeLvl}/batida;
+            document.getElementById('btn-income').innerText = R$ ${incomeCost};
+            document.getElementById('btn-income').disabled = money < incomeCost;
+            document.getElementById('lvl-balls').innerText = Qtd: ${balls.length};
+            document.getElementById('btn-balls').innerText = R$ ${ballCost};
+            document.getElementById('btn-balls').disabled = money < ballCost;
+            document.getElementById('lvl-damage').innerText = Dano: ${damageLvl};
+            document.getElementById('btn-damage').innerText = R$ ${damageCost};
+            document.getElementById('btn-damage').disabled = money < damageCost;
+        }
+
+        function buySpeed() {
+            if (money >= speedCost) { money -= speedCost; speedLvl++; speedCost = Math.floor(speedCost * 1.5); balls.forEach(b => { b.vx *= 1.15; b.vy *= 1.15; }); updateUI(); }
+        }
+        function buyIncome() {
+            if (money >= incomeCost) { money -= incomeCost; incomeLvl++; incomeCost = Math.floor(incomeCost * 1.6); updateUI(); }
+        }
+        function buyBall() {
+            if (money >= ballCost) {
+                money -= ballCost;
+                const angle = Math.random() * Math.PI * 2;
+                const spd = baseSpeed * Math.pow(1.15, speedLvl - 1);
+                balls.push({ x: centerX, y: centerY, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd });
+                ballCost = Math.floor(ballCost * 2.2);
+                updateUI();
+            }
+        }
+        function buyDamage() {
+            if (money >= damageCost) { money -= damageCost; damageLvl++; damageCost = Math.floor(damageCost * 1.8); updateUI(); }
+        }
+
+        function nextLevel() {
+            currentLevel++;
+            circleMaxHp = Math.floor(25 * Math.pow(1.7, currentLevel - 1));
+            circleHp = circleMaxHp;
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenhar círculo principal
+            const hpRatio = Math.max(0, circleHp / circleMaxHp);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.strokeStyle = '#222230';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            // Arco de progresso do círculo
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, -Math.PI / 2, (-Math.PI / 2) + (Math.PI * 2 * hpRatio));
+            ctx.strokeStyle = '#00d2d3';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            // Número grande no centro mostrando quanto falta para acabar
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 36px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(circleHp, centerX, centerY);
+
+            // Movimento das bolas e colisões
+            balls.forEach(b => {
+                b.x += b.vx;
+                b.y += b.vy;
+
+                const dx = b.x - centerX;
+                const dy = b.y - centerY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist + ballRadius >= radius) {
+                    const angle = Math.atan2(dy, dx);
+                    const normalX = Math.cos(angle);
+                    const normalY = Math.sin(angle);
+
+                    b.x = centerX + normalX * (radius - ballRadius);
+                    b.y = centerY + normalY * (radius - ballRadius);
+
+                    const dot = b.vx * normalX + b.vy * normalY;
+                    b.vx -= 2 * dot * normalX;
+                    b.vy -= 2 * dot * normalY;
+
+                    money += incomeLvl;
+                    circleHp -= damageLvl;
+
+                    if (circleHp <= 0) {
+                        nextLevel();
+                    }
+                    updateUI();
+                }
+
+                // Desenhar bola
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, ballRadius, 0, Math.PI * 2);
+                ctx.fillStyle = '#4cd137';
+                ctx.shadowColor = '#4cd137';
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        updateUI();
+        gameLoop();
+    </script>
+</body>
+</html>
